@@ -1,15 +1,52 @@
 from functools import wraps
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 
 import chika
 import homura
 import torch
 from homura import init_distributed, is_distributed, reporters
+from homura.metrics import accuracy
 from homura.modules import SmoothedCrossEntropy
 from homura.vision.data import DATASET_REGISTRY
 from torchvision.transforms import AutoAugment, RandomErasing
 
 from mixer import MLPMixers
+
+
+class Trainer(homura.trainers.SupervisedTrainer):
+
+    def iteration(self,
+                  data: Tuple[torch.Tensor, torch.Tensor]
+                  ) -> None:
+        input, target = data
+        with torch.cuda.amp.autocast(self._use_amp):
+            output = self.model(input)
+            loss = self.loss_f(output, target)
+
+        if self.is_train:
+            self.optimizer.zero_grad(set_to_none=True)
+            if self._use_amp:
+                self.scaler.scale(loss).backward()
+            else:
+                loss.backward()
+            if self.cfg.grad_clip > 0:
+                if self._use_amp:
+                    warnings.warn("gradient clipping may be incompatible with AMP", UserWarning)
+                torch.nn.utils.clip_grad_value_(self.model.parameters(), self.cfg.grad_norm_clip)
+            if self._use_amp:
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                self.optimizer.step()
+
+        if self._is_debug and torch.isnan(loss):
+            self.logger.warning("loss is NaN")
+
+        self.reporter.add('accuracy', accuracy(output, target))
+        self.reporter.add('loss', loss.detach_())
+        if self._report_topk is not None:
+            for top_k in self._report_topk:
+                self.reporter.add(f'accuracy@{top_k}', accuracy(output, target, top_k))
 
 
 def distributed_ready_main(func: Callable = None,
@@ -41,6 +78,7 @@ class DataConfig:
 class ModelConfig:
     name: str = chika.choices(*MLPMixers.choices())
     droppath_rate: float = 0.1
+    grad_clip: float = 1
     ema: bool = False
     ema_rate: float = chika.bounded(0.999, 0, 1)
 
@@ -96,17 +134,18 @@ def main(cfg: Config):
                                                               warmup_epochs=cfg.optim.warmup_epochs,
                                                               min_lr=cfg.optim.min_lr)
 
-    with homura.trainers.SupervisedTrainer(model,
-                                           optimizer,
-                                           SmoothedCrossEntropy(cfg.optim.label_smoothing),
-                                           reporters=[reporters.TensorboardReporter(".")],
-                                           scheduler=scheduler,
-                                           use_amp=cfg.amp,
-                                           use_cuda_nonblocking=True,
-                                           report_accuracy_topk=5,
-                                           optim_cfg=cfg.optim,
-                                           debug=cfg.debug
-                                           ) as trainer:
+    with Trainer(model,
+                 optimizer,
+                 SmoothedCrossEntropy(cfg.optim.label_smoothing),
+                 reporters=[reporters.TensorboardReporter(".")],
+                 scheduler=scheduler,
+                 use_amp=cfg.amp,
+                 use_cuda_nonblocking=True,
+                 report_accuracy_topk=5,
+                 optim_cfg=cfg.optim,
+                 debug=cfg.debug,
+                 cfg=cfg.model
+                 ) as trainer:
         for ep in trainer.epoch_range(cfg.optim.epochs):
             trainer.train(train_loader)
             trainer.test(test_loader)

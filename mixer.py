@@ -80,6 +80,10 @@ class MLPMixer(nn.Module):
                                       for dr in [x.item() for x in torch.linspace(0, droppath_rate, num_layers)]])
         self.ln = nn.LayerNorm(emb_dim)
         self.fc = nn.Linear(emb_dim, num_classes)
+        self._init_weights()
+
+    def _init_weights(self):
+        nn.init.zeros_(self.fc.weight)
 
     def forward(self,
                 input: torch.Tensor
