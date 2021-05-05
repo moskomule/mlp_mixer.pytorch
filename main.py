@@ -32,7 +32,7 @@ class Trainer(homura.trainers.SupervisedTrainer):
             if self.cfg.grad_clip > 0:
                 if self._use_amp:
                     warnings.warn("gradient clipping may be incompatible with AMP", UserWarning)
-                torch.nn.utils.clip_grad_value_(self.model.parameters(), self.cfg.grad_norm_clip)
+                torch.nn.utils.clip_grad_value_(self.model.parameters(), self.cfg.grad_clip)
             if self._use_amp:
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
