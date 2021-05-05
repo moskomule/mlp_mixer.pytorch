@@ -31,7 +31,7 @@ class Trainer(homura.trainers.SupervisedTrainer):
                 loss.backward()
             if self.cfg.grad_clip > 0:
                 if self._use_amp:
-                    self.scaler.unscale_()
+                    self.scaler.unscale_(self.optimizer)
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.grad_clip)
             if self._use_amp:
                 self.scaler.step(self.optimizer)
