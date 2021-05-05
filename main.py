@@ -31,8 +31,8 @@ class Trainer(homura.trainers.SupervisedTrainer):
                 loss.backward()
             if self.cfg.grad_clip > 0:
                 if self._use_amp:
-                    warnings.warn("gradient clipping may be incompatible with AMP", UserWarning)
-                torch.nn.utils.clip_grad_value_(self.model.parameters(), self.cfg.grad_clip)
+                    self.scaler.unscale_()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.grad_clip)
             if self._use_amp:
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
