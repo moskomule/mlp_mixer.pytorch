@@ -29,6 +29,7 @@ class MLPBlock(nn.Module):
                  droppath_rate: float
                  ):
         super().__init__()
+        self.droppath_rate = droppath_rate
         # flax's nn.LayerNorm applies only to the last dimension only, i.e., channel dimension
         self.token_mixer = nn.Sequential(nn.LayerNorm(num_channels),
                                          nn.Conv1d(num_tokens, token_mlp_dim, 1),

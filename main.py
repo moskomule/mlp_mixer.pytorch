@@ -39,7 +39,8 @@ class DataConfig:
 
 @chika.config
 class ModelConfig:
-    droppath_rate: float = 0
+    name: str = chika.choices(*MLPMixers.choices())
+    droppath_rate: float = 0.1
     ema: bool = False
     ema_rate: float = chika.bounded(0.999, 0, 1)
 
@@ -79,7 +80,7 @@ def main(cfg: Config):
         import rich
         rich.print(cfg)
     vs = DATASET_REGISTRY("imagenet")
-    model = MLPMixers(cfg.model.name)(droppath_rate=cfg.model.droppath_rate)
+    model = MLPMixers(cfg.model.name)(num_classes=1_000, droppath_rate=cfg.model.droppath_rate)
     train_da = vs.default_train_da.copy()
     if cfg.data.autoaugment:
         train_da.append(AutoAugment())
