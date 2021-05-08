@@ -3,7 +3,6 @@ from typing import Callable, Optional, Tuple
 
 import chika
 import homura
-import numpy as np
 import torch
 from homura import init_distributed, is_distributed, reporters
 from homura.metrics import accuracy
@@ -71,15 +70,9 @@ def distributed_ready_main(func: Callable = None,
 def fast_collate(batch: list
                  ) -> Tuple[torch.Tensor, torch.Tensor]:
     # from NVidia's Apex
-    imgs = [img for img, target in batch]
+    imgs = torch.stack([img for img, target in batch], dim=0)
     targets = torch.tensor([target for img, target in batch], dtype=torch.int64)
-    w = imgs[0].size[0]
-    h = imgs[0].size[1]
-    tensors = torch.zeros((len(imgs), 3, h, w), dtype=torch.uint8)
-    for i, img in enumerate(imgs):
-        nump_array = np.asarray(img, dtype=np.uint8)
-        tensors[i] += torch.from_numpy(nump_array).permute(1, 2, 0).contiguous()
-    return tensors, targets
+    return imgs, targets
 
 
 def gen_mixup_collate(alpha):
