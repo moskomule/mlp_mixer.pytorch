@@ -3,6 +3,8 @@
 PyTorch implementation
 of [Tolstikhin et al. 2021 "MLP-Mixer: An all-MLP Architecture for Vision"](https://arxiv.org/abs/2105.01601).
 
+The implementation is based on the pseudo code in the paper.
+
 ## Requirements
 
 ```commandline
@@ -15,5 +17,6 @@ pip install -U homura-core chika rich
 ## ImageNet classification
 
 ```
-python -m torch.distributed.launch --nproc_per_node=${NUM_GPUs} main.py ...
+ln -s $I{IMAGENET_ROOT} ${HOME}/.torch/data
+python -m torch.distributed.launch --nproc_per_node=${NUM_GPUs} main.py --model.name mixer_b16 --data.autoaugment --data.random_erasing
 ```

@@ -3,6 +3,7 @@ from typing import Callable, Optional, Tuple
 
 import chika
 import homura
+import numpy as np
 import torch
 from homura import init_distributed, is_distributed, reporters
 from homura.metrics import accuracy
@@ -67,11 +68,41 @@ def distributed_ready_main(func: Callable = None,
     return inner
 
 
+def fast_collate(batch: list
+                 ) -> Tuple[torch.Tensor, torch.Tensor]:
+    # from NVidia's Apex
+    imgs = [img for img, target in batch]
+    targets = torch.tensor([target for img, target in batch], dtype=torch.int64)
+    w = imgs[0].size[0]
+    h = imgs[0].size[1]
+    tensors = torch.zeros((len(imgs), 3, h, w), dtype=torch.uint8)
+    for i, img in enumerate(imgs):
+        nump_array = np.asarray(img, dtype=np.uint8)
+        tensors[i] += torch.from_numpy(nump_array).permute(1, 2, 0).contiguous()
+    return tensors, targets
+
+
+def gen_mixup_collate(alpha):
+    # see https://github.com/moskomule/mixup.pytorch
+    beta = torch.distributions.Beta(alpha + 1, alpha)
+
+    def f(batch):
+        tensors, targets = fast_collate(batch)
+        indices = torch.randperm(tensors.size(0))
+        _tensors = tensors.clone()[indices]
+        gamma = beta.sample()
+        tensors.mul_(gamma).add_(_tensors, alpha=1 - gamma)
+        return tensors, targets
+
+    return f
+
+
 @chika.config
 class DataConfig:
     batch_size: int = 128
     autoaugment: bool = False
     random_erasing: bool = False
+    mixup: float = chika.bounded(0, _from=0)
 
 
 @chika.config
@@ -118,6 +149,7 @@ def main(cfg: Config):
         import rich
         rich.print(cfg)
     vs = DATASET_REGISTRY("imagenet")
+    vs.collate_fn = fast_collate if cfg.data.mixup == 0 else gen_mixup_collate(cfg.data.mixup)
     model = MLPMixers(cfg.model.name)(num_classes=1_000, droppath_rate=cfg.model.droppath_rate)
     train_da = vs.default_train_da.copy()
     if cfg.data.autoaugment:
