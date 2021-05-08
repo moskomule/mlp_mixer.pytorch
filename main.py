@@ -131,6 +131,8 @@ class Config:
 
     def __post_init__(self):
         assert self.optim.lr > self.optim.min_lr
+        self.optim.lr *= self.data.batch_size * homura.get_world_size() / 512
+        self.optim.min_lr *= self.data.batch_size * homura.get_world_size() / 512
 
 
 @chika.main(cfg_cls=Config, change_job_dir=True)
