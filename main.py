@@ -69,7 +69,8 @@ def distributed_ready_main(func: Callable = None,
 
 def fast_collate(batch: list
                  ) -> Tuple[torch.Tensor, torch.Tensor]:
-    # from NVidia's Apex
+    # based on NVidia's Apex
+    # but it's not faster than the default probably because transforms.ToTensor is too slow.
     imgs = torch.stack([img for img, target in batch], dim=0)
     targets = torch.tensor([target for img, target in batch], dtype=torch.int64)
     return imgs, targets
@@ -155,7 +156,7 @@ def main(cfg: Config):
                                    post_norm_train_da=post_da,
                                    train_size=cfg.data.batch_size * 50 if cfg.debug else None,
                                    test_size=cfg.data.batch_size * 50 if cfg.debug else None,
-                                   num_workers=8)
+                                   num_workers=12)
     optimizer = homura.optim.AdamW(cfg.optim.lr, weight_decay=cfg.optim.weight_decay, multi_tensor=True)
     scheduler = homura.lr_scheduler.CosineAnnealingWithWarmup(cfg.optim.epochs, multiplier=cfg.optim.multiplier,
                                                               warmup_epochs=cfg.optim.warmup_epochs,
